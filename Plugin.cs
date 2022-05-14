@@ -6,6 +6,7 @@ using System.Reflection;
 using System.IO;
 using UnityEngine.XR;
 using UnityEngine.InputSystem;
+using GorillaLocomotion;
 
 
 namespace Flamethrower
@@ -23,6 +24,7 @@ namespace Flamethrower
         bool inRoom;
         public static readonly string assemblyLocation = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         GameObject handl;
+        GameObject indicator;
         bool rightTrigger;
         bool primButton;
         bool isflight = true;
@@ -30,6 +32,10 @@ namespace Flamethrower
         GameObject flame;
         float ftogglecooldown = 0.5f;
         float flighttoggle;
+        public Material Material1;
+        GameObject realflamethrower;
+        Transform theendpart;
+        Rigidbody RB;
 #pragma warning disable IDE0051 // IDE0051: Remove unused member
 
         void OnEnable()
@@ -55,8 +61,11 @@ namespace Flamethrower
             Stream str = Assembly.GetExecutingAssembly().GetManifestResourceStream("Flamethrower.Assets.flamethrower");
             AssetBundle bundle = AssetBundle.LoadFromStream(str);
             GameObject flamethrower = bundle.LoadAsset<GameObject>("flamethrower");
-            GameObject realflamethrower = Instantiate(flamethrower);
+            realflamethrower = Instantiate(flamethrower);
             flame = realflamethrower.transform.GetChild(0).gameObject;
+            indicator = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            theendpart = realflamethrower.transform.GetChild(1).transform;
+            RB = Player.Instance.bodyCollider.attachedRigidbody;
 
             handl = GameObject.Find("OfflineVRRig/Actual Gorilla/rig/body/shoulder.R/upper_arm.R/forearm.R/hand.R/palm.01.R/");
             realflamethrower.transform.SetParent(handl.transform, false);
@@ -64,6 +73,11 @@ namespace Flamethrower
             realflamethrower.transform.localRotation = Quaternion.Euler(0f, 270f, 90f);
             realflamethrower.transform.localPosition = new Vector3(-0.03f, 0.13f, - 0.075f);
             flame.SetActive(false);
+            indicator.transform.SetParent(realflamethrower.transform, false);
+            indicator.GetComponent<BoxCollider>().enabled = false;
+            indicator.transform.localScale = new Vector3(0.01f, 0.01f, 0.01f);
+            indicator.GetComponent<MeshRenderer>().material = Material1;
+            indicator.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.blue);
         }
 
         void FixedUpdate()
@@ -77,12 +91,15 @@ namespace Flamethrower
                 flame.SetActive(true);
                 if (inRoom && isflight)
                 {
-                    GorillaLocomotion.Player.Instance.GetComponent<Rigidbody>().AddForce(new Vector3(0f, 50f, 0f), ForceMode.Acceleration);
-                }
+                    RB.AddForce(10.0f * theendpart.right, ForceMode.Acceleration);
+                    RB.useGravity = false;
+                    RB.velocity = Vector3.ClampMagnitude(RB.velocity, 20.0f);
+                };
             }
             else
             {
                 flame.SetActive(false);
+                Player.Instance.GetComponent<Rigidbody>().useGravity = true;
             }
 
             if (Time.time > flighttoggle)
@@ -91,11 +108,20 @@ namespace Flamethrower
                 {
                     if (!isflight)
                     {
-                        isflight = true;
+                        if (inRoom)
+                        {
+                            isflight = true;
+                            indicator.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.green);
+                            RB.useGravity = true;
+                        }
                     }
                     else
                     {
-                        isflight = false;
+                        if (inRoom)
+                        {
+                            isflight = false;
+                            indicator.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.red);
+                        }
                     }
                     flighttoggle = Time.time + ftogglecooldown;
                 }
@@ -109,6 +135,14 @@ namespace Flamethrower
             /* This code will run regardless of if the mod is enabled*/
 
             inRoom = true;
+            if (isflight)
+            {
+                indicator.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.green);
+            }
+            else
+            {
+                indicator.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.red);
+            }
         }
 
         /* This attribute tells Utilla to call this method when a modded room is left */
@@ -119,6 +153,8 @@ namespace Flamethrower
             /* This code will run regardless of if the mod is enabled*/
 
             inRoom = false;
+            indicator.GetComponent<MeshRenderer>().material.SetColor("_Color", Color.blue);
+            RB.useGravity = true;
         }
     }
 }
